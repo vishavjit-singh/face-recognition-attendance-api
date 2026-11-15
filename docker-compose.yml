@@ -1,0 +1,20 @@
+# docker compose up --build     → API on http://localhost:8000
+# Keys come from .env (see .env.example); embeddings and events persist in the "attendance" volume.
+name: face-attendance
+
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      ATTENDANCE_ADMIN_KEY: ${ATTENDANCE_ADMIN_KEY:?set ATTENDANCE_ADMIN_KEY}
+      ATTENDANCE_DEVICE_KEY: ${ATTENDANCE_DEVICE_KEY:?set ATTENDANCE_DEVICE_KEY}
+    volumes:
+      - attendance:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      retries: 12
+
+volumes:
+  attendance:

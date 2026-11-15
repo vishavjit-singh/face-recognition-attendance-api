@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: lint, tests with the real models, demo
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: models/*.onnx
+          key: models-${{ hashFiles('config/settings.yaml') }}
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: make models
+      - run: pytest -q
+      - run: make demo
+      - uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.12'
+        with:
+          name: demo-images
+          path: docs/images/*.png
+
+  evaluate:
+    name: accuracy on Olivetti faces (YuNet + SFace)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: make evaluate
+      - run: |
+          echo "### Olivetti evaluation" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`json" >> "$GITHUB_STEP_SUMMARY"
+          cat reports/evaluation.json >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evaluation
+          path: reports/
+
+  docker:
+    name: docker image build + health check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t face-attendance .
+      - name: Start the API and call /health
+        run: |
+          docker run -d --name api -p 8000:8000 -e ATTENDANCE_ADMIN_KEY=ci-admin -e ATTENDANCE_DEVICE_KEY=ci-device \
+            face-attendance
+          for i in $(seq 1 30); do curl -sf localhost:8000/health && break; sleep 1; done
+          curl -sf localhost:8000/health
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/v1/people)" = "401"
+      - if: always()
+        run: docker logs api

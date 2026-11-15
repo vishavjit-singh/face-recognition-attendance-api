@@ -1,0 +1,46 @@
+# Attendance service settings. Secrets (API keys) come from the environment, never from this file.
+models:
+  dir: models
+  detector:
+    file: face_detection_yunet_2023mar.onnx
+    url: https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
+    sha256: 8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4
+  recognizer:
+    file: face_recognition_sface_2021dec.onnx
+    url: https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx
+    sha256: 0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79
+
+detection:
+  score_threshold: 0.8
+  nms_threshold: 0.3
+  max_side: 640                 # larger frames are downscaled before detection
+
+quality:                        # enrollment is strict; recognition uses the same gates
+  min_face_px: 60               # shorter side of the face box
+  min_sharpness: 60.0           # variance of the Laplacian inside the face box
+  brightness: [40, 220]         # mean grey level inside the face box
+  max_yaw: 0.35                 # |nose offset| / eye distance (0 = frontal)
+  max_roll_deg: 25
+
+matching:
+  threshold: 0.363              # cosine; the value OpenCV publishes for SFace. Re-check with `evaluate` on your data
+  margin: 0.05                  # best person must beat the runner-up by this much, else "ambiguous"
+  top_k: 3
+  max_templates_per_person: 10
+
+attendance:
+  timezone_offset_minutes: 330  # IST
+  cooldown_seconds: 120         # repeated sightings of the same person inside this window are not new events
+  min_session_minutes: 30       # check-out = the last sighting at least this long after check-in
+  workday_start: "09:30"
+  late_after_minutes: 10
+
+privacy:
+  store_images: false           # only embeddings are persisted
+  event_retention_days: 90
+  unknown_retention_days: 7     # unmatched sightings are kept briefly for audit, then purged
+
+api:
+  accept_embeddings: true       # edge devices may send SFace embeddings instead of frames (same model version!)
+  max_image_bytes: 5000000
+  database: data/attendance.db
